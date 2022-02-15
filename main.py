@@ -10,14 +10,18 @@ from indy_vdr.ledger import (
 BASE_URL = "https://indyscan.io/api/networks/"
 
 if __name__ == "__main__":
-    seqNo_Gte = 0
+    seqNo_Gte = 259500
 
     while True:
-        print(f'Looking for seqNos greater than {seqNo_Gte}')
+        print(f'\033[1;92;40mLooking for seqNos greater than {seqNo_Gte}\033[0m\n')
         response = requests.get(BASE_URL + f'/SOVRIN_STAGINGNET/ledgers/domain/txs?seqNoGte={seqNo_Gte}&filterTxNames=[%22NYM%22]&search=101&sortFromRecent=false')
         response = response.json()
         
         # print(json.dumps(response, indent=2))
+
+        if not response:
+            print("\033[1;92;40mNo more transactions at this time ...\033[0m\n")
+            break
 
         for item in response:
             seqNo = item["imeta"]["seqNo"]
@@ -30,8 +34,4 @@ if __name__ == "__main__":
             # Print txn
             # Submit txn Here
 
-        seqNo_Gte = seqNo + 1 # Get the last seqNo from the last response
-
-        if seqNo_Gte >= 1000:
-            print("Hit end!")
-            break
+            seqNo_Gte = seqNo + 1 # Get the last seqNo from the last response
