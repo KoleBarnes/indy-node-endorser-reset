@@ -1,0 +1,1 @@
+# indy-node-endorser-reset
