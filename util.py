@@ -2,6 +2,7 @@ from distutils.debug import DEBUG
 import os
 import requests
 import sys
+from DidKey import DidKey
 
 class bcolors:
     HEADER = '\033[95m'
@@ -43,7 +44,7 @@ def fetch_allow_dids():
     """
     Builds airtable request using API Key and URL env varibles.
     """
-    print("Building Airtable request ...")
+    info("Building Airtable request ...")
     AIRTABLE_API_KEY = os.environ.get('Airtable_API_Key')
     STAGING_ALLOW_DID_URL = os.environ.get('Airtable_Stagingnet_DIDs_URL')
 
@@ -64,5 +65,15 @@ def get_records(url, headers):
     airtable_response = response.json()
     has_items = bool(airtable_response["records"])
     if not has_items:
-        print("Airtable responded with empty response!")
+        info("Airtable responded with empty response!")
     return airtable_response
+
+def create_did(seed):
+    ident = None
+    if seed:
+        try:
+            ident = DidKey(seed)
+            log("DID:", ident.did, " Verkey:", ident.verkey)
+        except:
+            log("Invalid seed.  Continuing anonymously ...")
+    return ident

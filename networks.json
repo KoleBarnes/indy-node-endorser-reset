@@ -1,0 +1,56 @@
+{
+  "sbn": {
+    "name": "Sovrin BuilderNet",
+    "genesisUrl": "https://raw.githubusercontent.com/sovrin-foundation/sovrin/stable/sovrin/pool_transactions_builder_genesis",
+    "indyScanBaseUrl": "https://indyscan.io/api/networks/",
+    "indyScanNetworkId": "SOVRIN_MAINNET"
+  },
+  "ssn": {
+    "name": "Sovrin StagingNet",
+    "genesisUrl": "https://raw.githubusercontent.com/sovrin-foundation/sovrin/stable/sovrin/pool_transactions_sandbox_genesis",
+    "indyScanBaseUrl": "https://indyscan.io/api/networks/",
+    "indyScanNetworkId": "SOVRIN_STAGINGNET"
+  },
+  "smn": {
+    "name": "Sovrin MainNet",
+    "genesisUrl": "https://raw.githubusercontent.com/sovrin-foundation/sovrin/stable/sovrin/pool_transactions_live_genesis",
+    "indyScanBaseUrl": "https://indyscan.io/api/networks/",
+    "indyScanNetworkId": "SOVRIN_BUILDERNET"
+  },
+  "vn": {
+    "name": "Local von-network",
+    "genesisUrl": "http://host.docker.internal:9000/genesis",
+    "indyScanBaseUrl": "http://host.docker.internal:3707/api/networks/",
+    "indyScanNetworkId": "VON_NETWORK"
+  },
+  "bcd": {
+    "name": "BCovrin Dev",
+    "genesisUrl": "http://dev.bcovrin.vonx.io/genesis",
+    "indyScanBaseUrl": "",
+    "indyScanNetworkId": ""
+  },
+  "bct": {
+    "name": "BCovrin Test ",
+    "genesisUrl": "http://test.bcovrin.vonx.io/genesis",
+    "indyScanBaseUrl": "",
+    "indyScanNetworkId": ""
+  },
+  "bcp": {
+    "name": "BCovrin",
+    "genesisUrl": "http://prod.bcovrin.vonx.io/genesis",
+    "indyScanBaseUrl": "",
+    "indyScanNetworkId": ""
+  },
+  "gld": {
+    "name": "GreenLight Dev Ledger ",
+    "genesisUrl": "http://dev.greenlight.bcovrin.vonx.io/genesis",
+    "indyScanBaseUrl": "",
+    "indyScanNetworkId": ""
+  },
+  "gl": {
+    "name": "GreenLight Ledger ",
+    "genesisUrl": "http://greenlight.bcovrin.vonx.io/genesis",
+    "indyScanBaseUrl": "",
+    "indyScanNetworkId": ""
+  }
+}
