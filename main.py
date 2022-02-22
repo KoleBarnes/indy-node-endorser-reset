@@ -18,16 +18,17 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
     args, unknown = parser.parse_known_args()
 
-    # if not args.seed:
-    #     print("DID seed requird to continue. Exiting ...")
-    #     exit()
-    # else: did_seed = args.seed
+    if not args.seed:
+        print("DID seed required to continue. Exiting ...")
+        exit()
+    else:
+        did_seed = args.seed
 
-    # ident = util.create_did(did_seed)
+    ident = util.create_did(did_seed)
     networks = Networks()
     pool_collection = PoolCollection(args.verbose, networks)
     network = networks.resolve(args.net)
     demote_nyms = DemoteNyms(args.verbose, pool_collection)
-    result = asyncio.get_event_loop().run_until_complete(demote_nyms.demote(network)) #, ident
+    result = asyncio.get_event_loop().run_until_complete(demote_nyms.demote(network, ident))
 
     print(json.dumps(result, indent=2))

@@ -75,5 +75,6 @@ def create_did(seed):
             ident = DidKey(seed)
             log("DID:", ident.did, " Verkey:", ident.verkey)
         except:
-            log("Invalid seed.  Continuing anonymously ...")
+            log("Invalid seed. Valid seed needed to continue. Exiting ... ")
+            exit()
     return ident
