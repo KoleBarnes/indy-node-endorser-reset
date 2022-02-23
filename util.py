@@ -90,3 +90,19 @@ def create_did(seed):
             log("Invalid seed. Valid seed needed to continue. Exiting ... ")
             exit()
     return ident
+
+def get_last_seqNo():
+    f = open("LastSeqNo.txt", "r")
+    last_seqNo = f.read()
+    f.close()
+    return last_seqNo
+
+def write_last_seqNo(lastSeqNo):
+    # try:
+    f = open("LastSeqNo.txt", "w")
+    f.write(lastSeqNo)
+    f.close()
+    # except:
+    #     fail(f'Could not save last seqNo to file!')
+    # else: 
+    #     info("Last seqNo written to file.")

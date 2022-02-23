@@ -51,11 +51,19 @@ class DemoteNyms(object, metaclass=Singleton):
         INDYSCAN_BASE_URL = network.indy_scan_base_url # read in as base url from networks.json
         ALLOW_DIDS_LIST = []
 
+        result = {}
+
         seqNo = 0
         seqno_gte = 0
+        # seqno_gte = util.get_last_seqNo()
+        # print(seqno_gte)
+        # seqNo = 1000
+        # util.write_last_seqNo(seqNo)
+        #exit() #! Remove
 
         skipped_dids = []
         keyerror_list = []
+        demoted_dids_list = []
 
         allow_dids_records = util.fetch_allow_dids()
         #util.log_debug(json.dumps(allow_dids_records, indent=2)) #! Debug
@@ -104,15 +112,20 @@ class DemoteNyms(object, metaclass=Singleton):
                     util.log_debug(f'{dest} Not endorser.')
                     continue
 
-                demote_nym_reponse = await self.demote_nym(pool, ident, dest)
-                util.log_debug(json.dumps(demote_nym_reponse, indent=2))
-
-                exit() #! REMOVE
+                # demote_nym_reponse = await self.demote_nym(pool, ident, dest)
+                demoted_dids_list.append(dest)
+                # util.log_debug(json.dumps(demote_nym_reponse, indent=2))
 
             seqno_gte = seqNo + 1 # Get the last seqNo from the last indyscan response
 
+        #util.write_last_seqNo(seqNo)
+        result['last_seqNo'] = seqNo + 1
         if skipped_dids:
-            util.log(f'{len(skipped_dids)} allowed DIDs. \n{skipped_dids}')
+            result['allow_dids'] = {'count': len(skipped_dids), 'dids': skipped_dids}
         if keyerror_list:
-            util.log(f'{len(keyerror_list)} keyerrors found. \n{keyerror_list}')
+            result['errors'] = {'count': len(keyerror_list), 'keyword': keyerror_list}
+        if demoted_dids_list:
+            result['demoted_dids'] = {'count': len(demoted_dids_list), 'dids': demoted_dids_list}
+
+        return result
 
