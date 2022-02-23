@@ -2,8 +2,8 @@ import argparse
 import asyncio
 import json
 import os
-from demote_nyms import DemoteNyms
 from dotenv import load_dotenv
+from demote_nyms import DemoteNyms
 from pool import PoolCollection
 from networks import Networks
 import util
@@ -16,7 +16,10 @@ if __name__ == "__main__":
     parser.add_argument("--list-nets", action="store_true", help="List known networks.")
     parser.add_argument("-s", "--seed", default=os.environ.get('SEED') , help="The privileged DID seed to use for the ledger requests.  Can be specified using the 'SEED' environment variable.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging.")
     args, unknown = parser.parse_known_args()
+
+    util.enable_verbose(args.verbose, args.debug)
 
     if not args.seed:
         print("DID seed required to continue. Exiting ...")

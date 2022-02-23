@@ -1,6 +1,4 @@
-from contextlib import nullcontext
 import json
-import os
 import requests
 from indy_vdr.ledger import (
     build_get_nym_request,
@@ -34,9 +32,16 @@ class DemoteNyms(object, metaclass=Singleton):
         """
         nym_build_req = build_nym_request(ident.did, dest)
         nym_build_req_body = json.loads(nym_build_req.body)
-        nym_build_req_body["operation"]["role"] = ""
+        util.log_debug(json.dumps(nym_build_req_body, indent=2))
+
+        nym_build_req_body = json.loads(nym_build_req.body)
+        nym_build_req_body["operation"]["role"] = None
         custom_req = build_custom_request(nym_build_req_body)
+        util.log_debug(json.dumps(json.loads(custom_req.body), indent=2))
+
         ident.sign_request(custom_req)
+        util.log_debug(json.dumps(json.loads(custom_req.body), indent=2))
+        exit() #! REMOVE
         return await pool.submit_request(custom_req)
 
     async def demote(self, network: Network, ident: DidKey): #, ident: DidKey
@@ -53,30 +58,29 @@ class DemoteNyms(object, metaclass=Singleton):
         keyerror_list = []
 
         allow_dids_records = util.fetch_allow_dids()
-        # util.debug(json.dumps(allow_dids_records, indent=2)) #! Debug
+        #util.log_debug(json.dumps(allow_dids_records, indent=2)) #! Debug
 
         for record in allow_dids_records["records"]:
             allow_did = record["fields"].get("DIDs")
             ALLOW_DIDS_LIST.append(allow_did)
 
         pool, network_name = await self.pool_collection.get_pool(network.id)
-        # util.debug(pool, network_name) #! Debug
-        # nym_response = await self.getNYM(pool, self.nym)
 
         util.info("Starting scan. This may take a while ...")
 
         while True:
-            #util.debug(f'Looking for seqNos greater than {seqno_gte}') #! Debug
+            util.log_debug(f'Looking for seqNos greater than {seqno_gte}')
             indyscan_response = requests.get(INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22NYM%22]&search=101&sortFromRecent=false')
             indyscan_response = indyscan_response.json()
-            #util.debug(json.dumps(indyscan_response, indent=2)) #! Debug
+            #util.log_debug(json.dumps(indyscan_response, indent=2)) #! Debug
             if not indyscan_response:
                 util.info("No more transactions at this time ...")
                 break
 
-            if seqNo + 1 == seqno_gte:
-                util.debug('_________________________break_________________________') #! Debug
-                break
+            if network_name == "Local von-network":
+                if seqNo + 1 == seqno_gte:
+                    util.log_debug('End of local txn ... ')
+                    break
 
             for item in indyscan_response:
                 try:
@@ -84,35 +88,26 @@ class DemoteNyms(object, metaclass=Singleton):
                     txn = item["idata"]["expansion"]["idata"]["txn"]["data"]
                     dest = txn["dest"]
                     role = txn["role"]
-                    verkey = txn["verkey"]
                 except KeyError as key:
-                    print(f'Key Error: {key} seqNo:{seqNo} dest: {dest} role:{role} verkey: {verkey}')
+                    util.log(f'Key Error: {key} seqNo:{seqNo} dest: {dest} role:{role}')
                     keyerror_list.append(seqNo)
                 if dest in ALLOW_DIDS_LIST:
                     skipped_dids.append(dest)
                     util.info(f'Found Allow DID: {dest} Skipping ...')
                     continue
-                util.info(f'Building nym request for {dest} ... SeqNo: {seqNo} Role: {role} Verkey: {verkey}') #! Debug
 
                 nym_response = await self.get_nym(pool, dest)
-                nym_test = json.loads(nym_response["data"]) # Remove json encoding
-                if nym_test["role"] == "101":
-                    print("Is endorser!")
+                nym_check = json.loads(nym_response["data"]) # Remove json encoding
+                if nym_check["role"] == "101":
+                    util.info(f'Building demote NYM request for: {dest} SeqNo: {seqNo} Role: {role} ...')
                 else:
-                    print("Not endorser.")
+                    util.log_debug(f'{dest} Not endorser.')
                     continue
 
-                #TODO Write txn to remove role here
-                # submitter_did = "V4SGRU86Z58d6TV7PBUe6f"
                 demote_nym_reponse = await self.demote_nym(pool, ident, dest)
-                print(demote_nym_reponse)
+                util.log_debug(json.dumps(demote_nym_reponse, indent=2))
 
                 exit() #! REMOVE
-
-                #TODO Print txn
-                # print(pool_reponse)            
- 
-                #TODO Submit txn Here
 
             seqno_gte = seqNo + 1 # Get the last seqNo from the last indyscan response
 

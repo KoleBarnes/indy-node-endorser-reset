@@ -1,0 +1,7 @@
+asyncio            
+base58
+indy-vdr
+pycparser
+PyNaCl
+python-dotenv
+requests

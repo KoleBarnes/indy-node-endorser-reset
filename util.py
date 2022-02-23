@@ -1,50 +1,62 @@
-from distutils.debug import DEBUG
 import os
-import requests
 import sys
+import requests
 from DidKey import DidKey
+
+verbose = False
+debug = False
+
+def enable_verbose(args_verbose, args_debug):
+    global verbose
+    global debug
+    verbose = args_verbose
+    debug = args_debug
 
 class bcolors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    DEBUG = '\033[35m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
+    OKGREEN = '\033[92mINFO: '
+    DEBUG = '\033[35mDEBUG: '
+    WARNING = '\033[93mWARNING: '
+    FAIL = '\033[91mERROR: '
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
 def log(*args):
-    # if verbose:
-    print(*args, file=sys.stderr)
+    if verbose:
+        print(*args, file=sys.stderr)
 
 def info(*args):
-    # if verbose:
-    print(bcolors.OKGREEN)
-    print(*args, bcolors.ENDC, file=sys.stderr)
+    if verbose:
+        join_args = "".join(args)
+        built_str = bcolors.OKGREEN + join_args + bcolors.ENDC
+        print(built_str, file=sys.stderr)
 
 def warning(*args):
-    # if verbose:
-    print(bcolors.WARNING)
-    print(*args, bcolors.ENDC, file=sys.stderr)
+    if verbose:
+        join_args = "".join(args)
+        built_str = bcolors.WARNING + join_args + bcolors.ENDC
+        print(built_str, file=sys.stderr)
 
 def fail(*args):
-    # if verbose:
-    print(bcolors.FAIL)
-    print(*args, bcolors.ENDC, file=sys.stderr)
+    if verbose:
+        join_args = "".join(args)
+        built_str = bcolors.FAIL + join_args + bcolors.ENDC
+        print(built_str, file=sys.stderr)
 
-def debug(*args):
-    # if verbose:
-    print(bcolors.DEBUG)
-    print(*args, bcolors.ENDC, file=sys.stderr)
+def log_debug(*args):
+    if verbose and debug:
+        join_args = "".join(args)
+        built_str = bcolors.DEBUG + join_args + bcolors.ENDC
+        print(built_str, file=sys.stderr)
 
 def fetch_allow_dids():
     """
     Builds airtable request using API Key and URL env varibles.
     """
-    info("Building Airtable request ...")
+    log("Building Airtable request ...")
     AIRTABLE_API_KEY = os.environ.get('Airtable_API_Key')
     STAGING_ALLOW_DID_URL = os.environ.get('Airtable_Stagingnet_DIDs_URL')
 
@@ -65,7 +77,7 @@ def get_records(url, headers):
     airtable_response = response.json()
     has_items = bool(airtable_response["records"])
     if not has_items:
-        info("Airtable responded with empty response!")
+        warning("Airtable responded with empty response!")
     return airtable_response
 
 def create_did(seed):
