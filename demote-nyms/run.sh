@@ -87,5 +87,10 @@ cmd="${terminalEmu} docker run --rm ${DOCKER_INTERACTIVE} \
   -e "GENESIS_URL=${GENESIS_URL}" \
   -e "SEED=${SEED}" "
 
+# Dynamically mount the 'logs' directory if it exists.
+if [ -d "./logs/" ]; then
+  cmd+=$(getVolumeMount "./logs/")
+fi
+
 cmd+="$program_name \"$@\""
 eval ${cmd}

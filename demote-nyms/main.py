@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import json
 import os
+import indy_vdr
 from dotenv import load_dotenv
 from demote_nyms import DemoteNyms
 from pool import PoolCollection
@@ -27,11 +28,11 @@ if __name__ == "__main__":
     else:
         did_seed = args.seed
 
+    util.log("indy-vdr version:", indy_vdr.version())
     ident = util.create_did(did_seed)
     networks = Networks()
     pool_collection = PoolCollection(args.verbose, networks)
     network = networks.resolve(args.net)
     demote_nyms = DemoteNyms(args.verbose, pool_collection)
     result = asyncio.get_event_loop().run_until_complete(demote_nyms.demote(network, ident))
-
     print(json.dumps(result, indent=2))

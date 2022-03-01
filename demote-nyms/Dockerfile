@@ -16,7 +16,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 ADD networks.json .
 ADD *.py ./
 ADD .env .
-ADD LastSeqNo.txt .
 
 ENTRYPOINT ["bash", "-c", "python main.py $@", "--"]
 

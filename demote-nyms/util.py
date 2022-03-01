@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import requests
@@ -74,6 +75,7 @@ def get_records(url, headers):
     """
     print('Submitting Airtable request ...')
     response = requests.get(url, headers=headers)
+    log("Got Airtable response ...")
     airtable_response = response.json()
     has_items = bool(airtable_response["records"])
     if not has_items:
@@ -91,18 +93,27 @@ def create_did(seed):
             exit()
     return ident
 
-def get_last_seqNo():
-    f = open("LastSeqNo.txt", "r")
-    last_seqNo = f.read()
-    f.close()
-    return last_seqNo
+def read_from_file(path, file_name):
+    """
+    Reads json file.
+    
+    Args:
+        path: of file.
+        file_name: of file.
+    """
+    with open(f'{path}{file_name}', 'r') as json_file:
+            data = json.load(json_file)
+    return data
 
-def write_last_seqNo(lastSeqNo):
-    # try:
-    f = open("LastSeqNo.txt", "w")
-    f.write(lastSeqNo)
-    f.close()
-    # except:
-    #     fail(f'Could not save last seqNo to file!')
-    # else: 
-    #     info("Last seqNo written to file.")
+def write_to_file(path, file_name, result):
+    """
+    Writes results to json file.
+
+    Args:
+        path: of file.
+        file_name: of file.
+        result: json serializable.
+    """
+    with open(f'{path}{file_name}', 'w') as outfile:
+        json.dump(result, outfile, indent=2)
+        info('Result written to file.')
