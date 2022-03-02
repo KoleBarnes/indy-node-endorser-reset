@@ -82,6 +82,36 @@ class DemoteNyms(object, metaclass=Singleton):
         pool, network_name = await self.pool_collection.get_pool(network.id)
 
         util.info("Starting scan. This may take a while ...")
+        
+        # Check Allows from previous run to see if they need to be removed.
+        if data['allow_dids']['dids']:
+            util.info("Found allows from previous run. Checking to see if they are still allowed ...")
+            for did in data['allow_dids']['dids']:
+                
+                if did in ALLOW_DIDS_LIST:
+                    if did not in skipped_dids_list:
+                        skipped_dids_list.append(did)
+                    util.info(f'Found Allow DID: {did} Skipping ...')
+                    continue
+                    
+                nym_response = await self.get_nym(pool, did)
+                nym_check = json.loads(nym_response['data']) # Remove json encoding
+                seqNo = nym_check['seqNo']
+                dest = nym_check['dest']
+                role = nym_check['role']
+                if nym_check['role'] == "101":
+                    util.info(f'Building demote request for: {did} SeqNo: {seqNo} Role: {role} ...')
+                else:
+                    util.log_debug(f'{did} Not endorser.')
+                    continue
+
+                demote_nym_reponse = await self.demote_nym(pool, ident, did)
+                new_txn_seqNo = demote_nym_reponse['txnMetadata']['seqNo']
+                demoted_dids_dict['new_txn_seqno'] = new_txn_seqNo
+                demoted_dids_dict['did'] = did
+                demoted_dids_list.append(demoted_dids_dict.copy())
+                #util.log_debug(json.dumps(demote_nym_reponse, indent=2)) #* Debug
+
 
         while True:
             util.log_debug(f'Looking for seqNos greater than {seqno_gte} ...')
@@ -98,16 +128,12 @@ class DemoteNyms(object, metaclass=Singleton):
                     break
 
             for item in indyscan_response:
-                try:
-                    seqNo = item['imeta']['seqNo']
-                    txn = item['idata']['expansion']['idata']['txn']['data']
-                    dest = txn['dest']
-                    role = txn['role']
-                except KeyError as key:
-                    util.log(f'Key Error: {key} seqNo:{seqNo} dest: {dest} role:{role}')
-                    keyerror_list.append(seqNo)
+                txn = item['idata']['expansion']['idata']['txn']['data']
+                dest = txn['dest']
+                
                 if dest in ALLOW_DIDS_LIST:
-                    skipped_dids_list.append(dest)
+                    if dest not in skipped_dids_list:
+                        skipped_dids_list.append(did)
                     util.info(f'Found Allow DID: {dest} Skipping ...')
                     continue
 
@@ -133,8 +159,6 @@ class DemoteNyms(object, metaclass=Singleton):
         result['last_seqNo'] = seqNo + 1
         if skipped_dids_list:
             result['allow_dids'] = {'count': len(skipped_dids_list), 'dids': skipped_dids_list}
-        if keyerror_list:
-            result['errors'] = {'count': len(keyerror_list), 'keyword': keyerror_list}
         if demoted_dids_list:
             result['demoted_dids'] = {'count': len(demoted_dids_list), 'dids': demoted_dids_list}
         util.write_to_file(self.log_path, self.json_log, result)
