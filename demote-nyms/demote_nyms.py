@@ -11,6 +11,7 @@ from DidKey import DidKey
 from pool import PoolCollection
 from singleton import Singleton
 import util
+import datetime
 
 class DemoteNyms(object, metaclass=Singleton):
     """
@@ -54,15 +55,19 @@ class DemoteNyms(object, metaclass=Singleton):
         ALLOW_DIDS_LIST = []
 
         result = {}
-        skipped_dids = []
+        skipped_dids_list = []
         keyerror_list = []
         demoted_dids_list = []
+        demoted_dids_dict = {}
         seqNo = 0
 
         if os.path.exists(f'{self.log_path}{self.json_log}'):
             util.info('Found log file! Getting last fetched seqNo!')
             data = util.read_from_file(self.log_path, self.json_log)
-            seqno_gte = data['last_seqNo']
+            if data:
+                seqno_gte = data['last_seqNo']
+            else:
+              seqno_gte = 0  
         else:
             seqno_gte = 0
         util.info(f'Looking for transaction greater than: {seqno_gte}')
@@ -102,7 +107,7 @@ class DemoteNyms(object, metaclass=Singleton):
                     util.log(f'Key Error: {key} seqNo:{seqNo} dest: {dest} role:{role}')
                     keyerror_list.append(seqNo)
                 if dest in ALLOW_DIDS_LIST:
-                    skipped_dids.append(dest)
+                    skipped_dids_list.append(dest)
                     util.info(f'Found Allow DID: {dest} Skipping ...')
                     continue
 
@@ -114,15 +119,20 @@ class DemoteNyms(object, metaclass=Singleton):
                     util.log_debug(f'{dest} Not endorser.')
                     continue
 
-                # demote_nym_reponse = await self.demote_nym(pool, ident, dest)
-                demoted_dids_list.append(dest)
-                # util.log_debug(json.dumps(demote_nym_reponse, indent=2)) #* Debug
+                demote_nym_reponse = await self.demote_nym(pool, ident, dest)
+                new_txn_seqNo = demote_nym_reponse['txnMetadata']['seqNo']
+                demoted_dids_dict['new_txn_seqno'] = new_txn_seqNo
+                demoted_dids_dict['did'] = dest
+                demoted_dids_list.append(demoted_dids_dict.copy())
+                #util.log_debug(json.dumps(demote_nym_reponse, indent=2)) #* Debug
 
             seqno_gte = seqNo + 1 # Get the last seqNo from the last indyscan response
 
+        result['executing_did'] = ident.did
+        result['time'] = str(datetime.datetime.now())
         result['last_seqNo'] = seqNo + 1
-        if skipped_dids:
-            result['allow_dids'] = {'count': len(skipped_dids), 'dids': skipped_dids}
+        if skipped_dids_list:
+            result['allow_dids'] = {'count': len(skipped_dids_list), 'dids': skipped_dids_list}
         if keyerror_list:
             result['errors'] = {'count': len(keyerror_list), 'keyword': keyerror_list}
         if demoted_dids_list:

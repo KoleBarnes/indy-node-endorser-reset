@@ -102,7 +102,11 @@ def read_from_file(path, file_name):
         file_name: of file.
     """
     with open(f'{path}{file_name}', 'r') as json_file:
+        data = None
+        try:
             data = json.load(json_file)
+        except:
+            log("No data in file. Continuing ...")
     return data
 
 def write_to_file(path, file_name, result):
