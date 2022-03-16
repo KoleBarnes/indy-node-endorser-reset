@@ -1,5 +1,7 @@
 import json
+import glob
 import os
+from pathlib import Path
 import requests
 from indy_vdr.ledger import (
     build_get_nym_request,
@@ -21,7 +23,6 @@ class DemoteNyms(object, metaclass=Singleton):
         self.verbose = verbose
         self.pool_collection = pool_collection
         self.log_path = "./logs/"
-        self.json_log = "json_data.json"
 
     async def get_nym(self, pool, nym):
         """
@@ -90,24 +91,32 @@ class DemoteNyms(object, metaclass=Singleton):
 
         result = {}
         seqNo = 0
+        seqno_gte = 0
+        data = None
         skipped_dids_list = []
         demoted_dids_list = []
         start_time = datetime.datetime.now()
 
-        if os.path.exists(f'{self.log_path}{self.json_log}'):
-            util.info('Found log file! Getting last fetched seqNo!')
-            data = util.read_from_file(self.log_path, self.json_log)
-            if data:
-                seqno_gte = data['last_seqNo']
-            else:
-              seqno_gte = 0  
+        if not os.path.exists(f'{self.log_path}'):
+            print("Log file not found. Please create folder ./log and try again.")
+            print("Exiting ... ")
+            exit()
+
+        list_of_files = glob.glob(f'{self.log_path}*.json')
+        if list_of_files:
+            latest_file_path = max(list_of_files, key=os.path.getctime)
+            if os.path.exists(f'{latest_file_path}'):
+                util.info('Found log file! Getting last fetched seqNo!')
+                data = util.read_from_file(latest_file_path)
+                if data:
+                    seqno_gte = data['last_seqNo']
         else:
-            seqno_gte = 0
+            util.info("No previous log files. Continuing ...") 
+
         util.info(f'Looking for transaction greater than: {seqno_gte}')
 
         allow_dids_records = util.fetch_allow_dids()
-        util.log_debug(json.dumps(allow_dids_records, indent=2)) #* Debug
-
+        # util.log_debug(json.dumps(allow_dids_records, indent=2)) #* Debug
         for record in allow_dids_records['records']:
             allow_did = record['fields'].get('DIDs')
             ALLOW_DIDS_LIST.append(allow_did)
@@ -115,7 +124,6 @@ class DemoteNyms(object, metaclass=Singleton):
         pool, network_name = await self.pool_collection.get_pool(network.id)
 
         util.info("Starting scan. This may take a while ...")
-        
         # Check Allow list from previous run to see if they need to be removed.
         util.info("Checking allow DIDs from local file ...")
         if data:
@@ -165,7 +173,8 @@ class DemoteNyms(object, metaclass=Singleton):
             result['allow_dids'] = {'count': len(skipped_dids_list), 'dids': skipped_dids_list}
         if demoted_dids_list:
             result['demoted_dids'] = {'count': len(demoted_dids_list), 'dids': demoted_dids_list}
-        util.write_to_file(self.log_path, self.json_log, result)
+        date_time = end_time.strftime("%Y-%m-%d--%H_%M_%S")
+        new_file_path = self.log_path + date_time + '.json'
+        util.write_to_file(new_file_path, result)
 
         return result
-

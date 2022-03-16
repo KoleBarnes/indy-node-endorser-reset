@@ -93,15 +93,14 @@ def create_did(seed):
             exit()
     return ident
 
-def read_from_file(path, file_name):
+def read_from_file(file_path):
     """
     Reads json file.
     
     Args:
-        path: of file.
-        file_name: of file.
+        file_path: path of file. ex: ./[Path]/[File]
     """
-    with open(f'{path}{file_name}', 'r') as json_file:
+    with open(f'{file_path}', 'r') as json_file:
         data = None
         try:
             data = json.load(json_file)
@@ -109,15 +108,14 @@ def read_from_file(path, file_name):
             log("No data in file. Continuing ...")
     return data
 
-def write_to_file(path, file_name, result):
+def write_to_file(file_path, result):
     """
     Writes results to json file.
 
     Args:
-        path: of file.
-        file_name: of file.
+        file_path: path of file. ex: ./[Path]/[File]
         result: json serializable.
     """
-    with open(f'{path}{file_name}', 'w') as outfile:
+    with open(f'{file_path}', 'w') as outfile:
         json.dump(result, outfile, indent=2)
         info('Result written to file.')
