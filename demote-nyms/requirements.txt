@@ -5,3 +5,4 @@ pycparser
 PyNaCl
 python-dotenv
 requests
+pandas

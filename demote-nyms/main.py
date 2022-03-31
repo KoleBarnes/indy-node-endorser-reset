@@ -15,7 +15,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch NYM transactions with endorser role and reset them.")
     parser.add_argument("--net", choices=Networks.get_ids(), help="Connect to a known network using an ID.")
     parser.add_argument("--list-nets", action="store_true", help="List known networks.")
-    parser.add_argument("-s", "--seed", default=os.environ.get('SEED') , help="The privileged DID seed to use for the ledger requests.  Can be specified using the 'SEED' environment variable.")
+    parser.add_argument("-s", "--seed", default=os.environ.get('SEED'), help="The privileged DID seed to use for the ledger requests.  Can be specified using the 'SEED' environment variable.")
+    parser.add_argument("--DEMOTE", action="store_true", help="Enable demoting. Role of NYM required.")
+    parser.add_argument("--role", default=os.environ.get('ROLE'), help="The role you are looking for. Role of NYM required for demoting")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging.")
     args, unknown = parser.parse_known_args()
@@ -33,6 +35,17 @@ if __name__ == "__main__":
     networks = Networks()
     pool_collection = PoolCollection(args.verbose, networks)
     network = networks.resolve(args.net)
-    demote_nyms = DemoteNyms(args.verbose, pool_collection)
+
+    if args.DEMOTE: # Check to avoid accidental demotion.
+        if not args.role or args.role != 'NYM':
+            util.warning('Role flag must be set to NYM, to enable demoting!')
+            print('exiting...')
+            exit()
+        Join = input(f"\033[93mWARNING: You are about to demote NYM's on network '{network.name}'! Do you wish to proceed? (y) to continue... \033[m").lower()
+        if not Join.startswith('y'):
+            print('exiting...')
+            exit()
+
+    demote_nyms = DemoteNyms(args.verbose, args.DEMOTE, args.role, pool_collection)
     result = asyncio.get_event_loop().run_until_complete(demote_nyms.demote(network, ident))
     print(json.dumps(result, indent=2))

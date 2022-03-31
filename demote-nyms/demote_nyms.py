@@ -3,6 +3,7 @@ import glob
 import os
 from pathlib import Path
 import requests
+import pandas as pd
 from indy_vdr.ledger import (
     build_get_nym_request,
     build_nym_request,
@@ -19,8 +20,10 @@ class DemoteNyms(object, metaclass=Singleton):
     """
     DemoteNyms Class
     """
-    def __init__(self, verbose, pool_collection: PoolCollection):
+    def __init__(self, verbose, DEMOTE, role, pool_collection: PoolCollection):
         self.verbose = verbose
+        self.DEMOTE = DEMOTE
+        self.role = role
         self.pool_collection = pool_collection
         self.log_path = "./logs/"
 
@@ -73,10 +76,12 @@ class DemoteNyms(object, metaclass=Singleton):
                 util.log_debug(f'{did} Not endorser.')
                 continue
 
-            demote_nym_reponse = await self.demote_nym(pool, ident, did)
-            # util.log_debug(json.dumps(demote_nym_reponse, indent=2)) #* Debug
-            new_txn_seqNo = demote_nym_reponse['txnMetadata']['seqNo']
-            demoted_dids_dict['new_txn_seqno'] = new_txn_seqNo
+            if self.DEMOTE and self.role == 'NYM': # Check to avoid accidental demotion.
+                demote_nym_reponse = await self.demote_nym(pool, ident, did)
+                # util.log_debug(json.dumps(demote_nym_reponse, indent=2)) #* Debug
+                new_txn_seqNo = demote_nym_reponse['txnMetadata']['seqNo']
+                demoted_dids_dict['new_txn_seqno'] = new_txn_seqNo
+
             demoted_dids_dict['did'] = did
             demoted_dids_list.append(demoted_dids_dict.copy())
         
@@ -141,7 +146,7 @@ class DemoteNyms(object, metaclass=Singleton):
         list_of_dids = []
         while True:
             util.log_debug(f'Looking for seqNos greater than {seqno_gte} ...')
-            indyscan_response = requests.get(INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22NYM%22]&search=101&sortFromRecent=false')
+            indyscan_response = requests.get(INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22{self.role}%22]&search=101&sortFromRecent=false')
             indyscan_response = indyscan_response.json()
             # util.log_debug(json.dumps(indyscan_response, indent=2)) #* Debug
             if not indyscan_response:
@@ -170,11 +175,19 @@ class DemoteNyms(object, metaclass=Singleton):
         result['executing_did'] = ident.did
         result['last_seqNo'] = seqNo + 1
         if skipped_dids_list:
-            result['allow_dids'] = {'count': len(skipped_dids_list), 'dids': skipped_dids_list}
+            result['allow_dids'] = {'count': len(skipped_dids_list), 'dids': skipped_dids_list }
         if demoted_dids_list:
-            result['demoted_dids'] = {'count': len(demoted_dids_list), 'dids': demoted_dids_list}
+            result['demoted_dids'] = {'count': len(demoted_dids_list), 'dids': demoted_dids_list }
+        if list_of_dids:
+            result['list_of_dids'] = { 'count': len(list_of_dids), 'dids': list_of_dids }
         date_time = end_time.strftime("%Y-%m-%d--%H_%M_%S")
         new_file_path = self.log_path + date_time + '.json'
         util.write_to_file(new_file_path, result)
+
+        with open(f'{new_file_path}', encoding='utf-8') as inputfile:
+            df = pd.read_json(inputfile)
+        
+        csv_file_name = self.log_path + date_time + '.csv'
+        df.to_csv(f'{csv_file_name}', encoding='utf-8', index=False)
 
         return result
