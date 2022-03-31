@@ -17,7 +17,8 @@ if __name__ == "__main__":
     parser.add_argument("--list-nets", action="store_true", help="List known networks.")
     parser.add_argument("-s", "--seed", default=os.environ.get('SEED'), help="The privileged DID seed to use for the ledger requests.  Can be specified using the 'SEED' environment variable.")
     parser.add_argument("--DEMOTE", action="store_true", help="Enable demoting. Role of NYM required.")
-    parser.add_argument("--role", default=os.environ.get('ROLE'), help="The role you are looking for. Role of NYM required for demoting")
+    parser.add_argument("--role", default=os.environ.get('ROLE'), help="The role you are looking for. Role of 101 required for demoting. - None (common USER) - '0' (TRUSTEE) - '2' (STEWARD) - '101' (ENDORSER) - '201' (NETWORK_MONITOR)")
+    parser.add_argument("--batch", default=os.environ.get('BATCH'), help="Number of NYM's you would like to go through.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging.")
     args, unknown = parser.parse_known_args()
@@ -30,6 +31,8 @@ if __name__ == "__main__":
     else:
         did_seed = args.seed
 
+    if not args.batch: args.batch = None
+
     util.log("indy-vdr version:", indy_vdr.version())
     ident = util.create_did(did_seed)
     networks = Networks()
@@ -37,8 +40,8 @@ if __name__ == "__main__":
     network = networks.resolve(args.net)
 
     if args.DEMOTE: # Check to avoid accidental demotion.
-        if not args.role or args.role != 'NYM':
-            util.warning('Role flag must be set to NYM, to enable demoting!')
+        if not args.role or args.role != '101':
+            util.warning('Role flag must be set to endorsor ie: 101, to enable demoting!')
             print('exiting...')
             exit()
         Join = input(f"\033[93mWARNING: You are about to demote NYM's on network '{network.name}'! Do you wish to proceed? (y) to continue... \033[m").lower()
@@ -46,6 +49,6 @@ if __name__ == "__main__":
             print('exiting...')
             exit()
 
-    demote_nyms = DemoteNyms(args.verbose, args.DEMOTE, args.role, pool_collection)
+    demote_nyms = DemoteNyms(args.verbose, network.indy_scan_base_url, args.DEMOTE, args.role, args.batch, pool_collection)
     result = asyncio.get_event_loop().run_until_complete(demote_nyms.demote(network, ident))
     print(json.dumps(result, indent=2))

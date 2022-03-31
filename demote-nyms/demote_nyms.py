@@ -1,9 +1,8 @@
 import json
+import csv
 import glob
 import os
-from pathlib import Path
 import requests
-import pandas as pd
 from indy_vdr.ledger import (
     build_get_nym_request,
     build_nym_request,
@@ -20,10 +19,13 @@ class DemoteNyms(object, metaclass=Singleton):
     """
     DemoteNyms Class
     """
-    def __init__(self, verbose, DEMOTE, role, pool_collection: PoolCollection):
+    def __init__(self, verbose, network_url, DEMOTE, role, batch: int, pool_collection: PoolCollection):
         self.verbose = verbose
+        self.INDYSCAN_BASE_URL = network_url
         self.DEMOTE = DEMOTE
         self.role = role
+        if batch: self.batch = int(batch)
+        else: self.batch = None
         self.pool_collection = pool_collection
         self.log_path = "./logs/"
 
@@ -38,6 +40,8 @@ class DemoteNyms(object, metaclass=Singleton):
         """
         Uses build_nym_request to demote NYM.
         """
+        pass
+        print("DEMOTING DID!!!")
         nym_build_req = build_nym_request(ident.did, dest)
         nym_build_req_body = json.loads(nym_build_req.body)
         # util.log_debug(json.dumps(nym_build_req_body, indent=2)) #* Debug
@@ -51,11 +55,10 @@ class DemoteNyms(object, metaclass=Singleton):
         # util.log_debug(json.dumps(json.loads(custom_req.body), indent=2)) #* Debug
         return await pool.submit_request(custom_req)
 
-    async def iterate(self, pool, ident: DidKey, ALLOW_DIDS_LIST: list, demoted_dids_list: list, skipped_dids_list: list, list_of_dids: list):
+    async def iterate(self, pool, ident: DidKey, ALLOW_DIDS_LIST: list, seqNo, demoted_dids_list: list, skipped_dids_list: list, list_of_dids: list):
         """
         Iterate through list of DID's and demotes them skipping allowed DIDs
         """
-        seqNo = 0
         demoted_dids_dict = {}
 
         for did in list_of_dids:
@@ -64,34 +67,65 @@ class DemoteNyms(object, metaclass=Singleton):
                     skipped_dids_list.append(did)
                 util.info(f'Found Allow DID: {did} Skipping ...')
                 continue
-                
+
             nym_response = await self.get_nym(pool, did)
             nym_check = json.loads(nym_response['data']) # Remove json encoding
             seqNo = nym_check['seqNo']
             did = nym_check['dest']
             role = nym_check['role']
+            txnTime = nym_check['txnTime']
+            if 'alias' in nym_check:
+                util.info('yes alias.')
+                alias = nym_check['alias']
+            else:
+                alias = None
+
+            # indyscan_response = requests.get(self.INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22ATTRIB%22]&search={did}&sortFromRecent=false')
+            # indyscan_response = indyscan_response.json()
+            # # util.log_debug(json.dumps(indyscan_response, indent=2)) #* Debug
+
+            # if indyscan_response:
+            #     for item in indyscan_response:
+            #         txn = item['txn']['data']
+            #         if endpoint in txn:
+            #             endpoint = txn['endpoint']
+            #         else:
+            #             util.info("No end point.")
+                        
+            # else:
+            #     util.info("No attrib ...")
+
+            row = (seqNo, did, role, alias, txnTime)
+            csv_file_path = self.log_path + 'CSVlog' + '.csv'
+            with open(csv_file_path,'a') as csv_file:
+                writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONE)
+                writer.writerow(row)
+
             if nym_check['role'] == "101":
                 util.info(f'Building demote request for: {did} SeqNo: {seqNo} Role: {role} ...')
             else:
-                util.log_debug(f'{did} Not endorser.')
+                util.log_debug(f'{did} Not endorser. Role: {role} ...')
                 continue
 
-            if self.DEMOTE and self.role == 'NYM': # Check to avoid accidental demotion.
+            if self.DEMOTE and self.role == '101': # Check to avoid accidental demotion.
                 demote_nym_reponse = await self.demote_nym(pool, ident, did)
                 # util.log_debug(json.dumps(demote_nym_reponse, indent=2)) #* Debug
                 new_txn_seqNo = demote_nym_reponse['txnMetadata']['seqNo']
                 demoted_dids_dict['new_txn_seqno'] = new_txn_seqNo
+                demoted_dids_dict['did'] = did
+                demoted_dids_list.append(demoted_dids_dict.copy())
+            
+            if self.batch:
+                if self.batch == 0:
+                    break
+                self.batch = self.batch - 1
 
-            demoted_dids_dict['did'] = did
-            demoted_dids_list.append(demoted_dids_dict.copy())
-        
         return demoted_dids_list, skipped_dids_list, seqNo
 
     async def demote(self, network: Network, ident: DidKey):
         """
         Scans for NYMs in txns with endorser roll and sends a list of DID'd to iterate() to get demoted.
         """
-        INDYSCAN_BASE_URL = network.indy_scan_base_url # read in as base url from networks.json
         ALLOW_DIDS_LIST = []
 
         result = {}
@@ -134,10 +168,11 @@ class DemoteNyms(object, metaclass=Singleton):
         if data:
             list_of_dids = []
             util.info("Found allows from previous run. Checking to see if they are still allowed ...")
-            for did in data['allow_dids']['dids']:
-                list_of_dids.append(did)
+            if 'allow_dids' in data:
+                for did in data['allow_dids']['dids']:
+                    list_of_dids.append(did)
                 
-            demoted_dids_list, skipped_dids_list, seqNo = await self.iterate(pool, ident, ALLOW_DIDS_LIST, demoted_dids_list, skipped_dids_list, list_of_dids)
+            demoted_dids_list, skipped_dids_list, seqNo = await self.iterate(pool, ident, ALLOW_DIDS_LIST, seqno_gte, demoted_dids_list, skipped_dids_list, list_of_dids)
         else:
             util.info("No allow DIDs in local file ...")
 
@@ -146,24 +181,26 @@ class DemoteNyms(object, metaclass=Singleton):
         list_of_dids = []
         while True:
             util.log_debug(f'Looking for seqNos greater than {seqno_gte} ...')
-            indyscan_response = requests.get(INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22{self.role}%22]&search=101&sortFromRecent=false')
+            indyscan_response = requests.get(self.INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22NYM%22]&search={self.role}&sortFromRecent=false')
+            #print(self.INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22NYM%22]&search={self.role}&sortFromRecent=false')
             indyscan_response = indyscan_response.json()
-            # util.log_debug(json.dumps(indyscan_response, indent=2)) #* Debug
-            if not indyscan_response:
-                util.info("No more transactions at this time ...")
-                break
+            #util.log_debug(json.dumps(indyscan_response, indent=2)) #* Debug
 
             if network_name == "Local von-network":
                 if seqNo + 1 == seqno_gte:
                     util.log_debug('End of local txn ... ')
                     break
 
-            for item in indyscan_response:
-                txn = item['idata']['expansion']['idata']['txn']['data']
-                did = txn['dest']
-                list_of_dids.append(did)
+            if indyscan_response:
+                for item in indyscan_response:
+                    txn = item['idata']['expansion']['idata']['txn']['data']
+                    did = txn['dest']
+                    list_of_dids.append(did)
+            else:
+                util.info("No more transactions at this time ...")
+                break
                 
-            demoted_dids_list, skipped_dids_list, seqNo = await self.iterate(pool, ident, ALLOW_DIDS_LIST, demoted_dids_list, skipped_dids_list, list_of_dids)
+            demoted_dids_list, skipped_dids_list, seqNo = await self.iterate(pool, ident, ALLOW_DIDS_LIST, seqno_gte, demoted_dids_list, skipped_dids_list, list_of_dids)
 
             seqno_gte = seqNo + 1 # Get the last seqNo from the last indyscan response
 
@@ -178,16 +215,10 @@ class DemoteNyms(object, metaclass=Singleton):
             result['allow_dids'] = {'count': len(skipped_dids_list), 'dids': skipped_dids_list }
         if demoted_dids_list:
             result['demoted_dids'] = {'count': len(demoted_dids_list), 'dids': demoted_dids_list }
-        if list_of_dids:
-            result['list_of_dids'] = { 'count': len(list_of_dids), 'dids': list_of_dids }
+        # if list_of_dids:
+        #     result['list_of_dids'] = { 'count': len(list_of_dids), 'dids': list_of_dids }
         date_time = end_time.strftime("%Y-%m-%d--%H_%M_%S")
         new_file_path = self.log_path + date_time + '.json'
         util.write_to_file(new_file_path, result)
-
-        with open(f'{new_file_path}', encoding='utf-8') as inputfile:
-            df = pd.read_json(inputfile)
-        
-        csv_file_name = self.log_path + date_time + '.csv'
-        df.to_csv(f'{csv_file_name}', encoding='utf-8', index=False)
 
         return result
