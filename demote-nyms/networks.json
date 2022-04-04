@@ -3,7 +3,7 @@
     "name": "Sovrin BuilderNet",
     "genesisUrl": "https://raw.githubusercontent.com/sovrin-foundation/sovrin/stable/sovrin/pool_transactions_builder_genesis",
     "indyScanBaseUrl": "https://indyscan.io/api/networks/",
-    "indyScanNetworkId": "SOVRIN_MAINNET"
+    "indyScanNetworkId": "SOVRIN_BUILDERNET"
   },
   "ssn": {
     "name": "Sovrin StagingNet",
@@ -15,7 +15,7 @@
     "name": "Sovrin MainNet",
     "genesisUrl": "https://raw.githubusercontent.com/sovrin-foundation/sovrin/stable/sovrin/pool_transactions_live_genesis",
     "indyScanBaseUrl": "https://indyscan.io/api/networks/",
-    "indyScanNetworkId": "SOVRIN_BUILDERNET"
+    "indyScanNetworkId": "SOVRIN_MAINNET"
   },
   "vn": {
     "name": "Local von-network",

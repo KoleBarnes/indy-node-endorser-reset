@@ -1,6 +1,6 @@
 asyncio            
 base58
-indy-vdr
+indy-vdr==0.3.4
 pycparser
 PyNaCl
 python-dotenv

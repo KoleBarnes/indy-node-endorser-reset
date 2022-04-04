@@ -10,6 +10,7 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/*
 USER $user
 
+RUN pip install --upgrade pip
 ADD requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
