@@ -21,15 +21,20 @@ class DemoteNyms(object, metaclass=Singleton):
     """
     DemoteNyms Class
     """
-    def __init__(self, verbose, network_url, DEMOTE, role, batch: int, pool_collection: PoolCollection):
+    def __init__(self, verbose, network, DEMOTE, role, batch: int, pool_collection: PoolCollection):
         self.verbose = verbose
-        self.INDYSCAN_BASE_URL = network_url
+        self.INDYSCAN_BASE_URL = network.indy_scan_base_url
         self.DEMOTE = DEMOTE
         self.role = role
         if batch: self.batch = int(batch)
         else: self.batch = -1
         self.pool_collection = pool_collection
-        self.log_path = "./logs/"
+        self.log_path = f'./logs/{network.name}/'
+
+        # Create directory.
+        if not os.path.exists(self.log_path):
+            os.mkdir(self.log_path)
+            print(f'Directory {self.log_path} created ...')
 
     async def get_nym(self, pool, nym):
         """
@@ -76,7 +81,7 @@ class DemoteNyms(object, metaclass=Singleton):
         start_time = datetime.datetime.now()
 
         if not os.path.exists(f'{self.log_path}'):
-            print("Log file not found. Please create folder ./log and try again.")
+            print("Log file not found. Please create folder ./logs and try again.")
             print("Exiting ... ")
             exit()
 
@@ -119,7 +124,6 @@ class DemoteNyms(object, metaclass=Singleton):
             # Get Nym transactions with specified role from indy scan
             util.log_debug(f'Looking for seqNos greater than {seqno_gte} ...')
             indyscan_response = requests.get(self.INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22NYM%22]&search={self.role}&sortFromRecent=false')
-            #print(self.INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22NYM%22]&search={self.role}&sortFromRecent=false')
             indyscan_response = indyscan_response.json()
             #* Debug util.log_debug(json.dumps(indyscan_response, indent=2))
 
@@ -175,9 +179,20 @@ class DemoteNyms(object, metaclass=Singleton):
                 else:
                     endpoint = None
 
+                if role == None:
+                    role_alias = 'USER'
+                elif role == '0':
+                    role_alias = 'TRUSTEE'
+                elif role == '2':
+                    role_alias = 'STEWARD'
+                elif role == '101':
+                    role_alias = 'ENDORSER'
+                elif role == '201':
+                    role_alias = 'NETWORK_MONITOR'
+
                 # Write data to csv file.
-                row = (seqNo, did, role, alias, endpoint, txn_date_time)
-                csv_file_path = self.log_path + 'CSVlog' + '.csv'
+                row = (seqNo, did, role_alias, alias, endpoint, txn_date_time)
+                csv_file_path = f'{self.log_path}log.csv'
                 with open(csv_file_path,'a') as csv_file:
                     writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONE)
                     writer.writerow(row)
@@ -238,7 +253,7 @@ class DemoteNyms(object, metaclass=Singleton):
         # if list_of_dids:
         #     result['list_of_dids'] = { 'count': len(list_of_dids), 'dids': list_of_dids }
         date_time = end_time.strftime("%Y-%m-%d--%H_%M_%S")
-        new_file_path = self.log_path + date_time + '.json'
+        new_file_path = f'{self.log_path}{date_time}.json'
         util.write_to_file(new_file_path, result)
 
         return result

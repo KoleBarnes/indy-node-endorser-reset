@@ -25,21 +25,14 @@ if __name__ == "__main__":
 
     util.enable_verbose(args.verbose, args.debug)
 
-    if not args.seed:
-        print("DID seed required to continue. Exiting ...")
-        exit()
-    else:
-        did_seed = args.seed
-
     if not args.batch: args.batch = None
-
-    util.log("indy-vdr version:", indy_vdr.version())
-    ident = util.create_did(did_seed)
-    networks = Networks()
-    pool_collection = PoolCollection(args.verbose, networks)
-    network = networks.resolve(args.net)
+    
+    did_seed = None if not args.seed else args.seed
 
     if args.DEMOTE: # Check to avoid accidental demotion.
+        if not did_seed:
+            print("DID seed required to Demote. Exiting ...")
+            exit()
         if not args.role or args.role != '101':
             util.warning('Role flag must be set to endorsor ie: 101, to enable demoting!')
             print('exiting...')
@@ -49,6 +42,12 @@ if __name__ == "__main__":
             print('exiting...')
             exit()
 
-    demote_nyms = DemoteNyms(args.verbose, network.indy_scan_base_url, args.DEMOTE, args.role, args.batch, pool_collection)
+    util.log("indy-vdr version:", indy_vdr.version())
+    ident = util.create_did(did_seed)
+    networks = Networks()
+    pool_collection = PoolCollection(args.verbose, networks)
+    network = networks.resolve(args.net)
+
+    demote_nyms = DemoteNyms(args.verbose, network, args.DEMOTE, args.role, args.batch, pool_collection)
     result = asyncio.get_event_loop().run_until_complete(demote_nyms.demote(network, ident))
     print(json.dumps(result, indent=2))
