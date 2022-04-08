@@ -122,10 +122,14 @@ class DemoteNyms(object, metaclass=Singleton):
         util.info("Checking IndyScan Transactions ...")
         while True:
             # Get Nym transactions with specified role from indy scan
-            util.log_debug(f'Looking for seqNos greater than {seqno_gte} ...')
-            indyscan_response = requests.get(self.INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22NYM%22]&search={self.role}&sortFromRecent=false')
-            indyscan_response = indyscan_response.json()
-            #* Debug util.log_debug(json.dumps(indyscan_response, indent=2))
+            util.info(f'Looking for seqNos greater than {seqno_gte} ...')
+            
+            indyscan_nym_url = f"{self.INDYSCAN_BASE_URL}/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22NYM%22]&search='{self.role}'&sortFromRecent=false"
+            with requests.get(indyscan_nym_url, stream=True) as nym_response:
+                indyscan_nym_response = nym_response.json()
+
+            #* Debug print(indyscan_nym_url) 
+            #* Debug util.log_debug(json.dumps(indyscan_nym_response, indent=2)) 
 
             if network_name == "Local von-network":
                 if seqNo + 1 == seqno_gte:
@@ -133,8 +137,8 @@ class DemoteNyms(object, metaclass=Singleton):
                     break
             
             # Add NYM's DID with specified role, append them to a list to check current state from ledger.
-            if indyscan_response:
-                for item in indyscan_response:
+            if indyscan_nym_response:
+                for item in indyscan_nym_response:
                     txn = item['idata']['expansion']['idata']['txn']['data']
                     did = txn['dest']
                     list_of_dids.append(did)
@@ -153,50 +157,58 @@ class DemoteNyms(object, metaclass=Singleton):
                 did = nym_check['dest']
                 role = nym_check['role']
                 txnTime = nym_check['txnTime']
-                txn_date_time = datetime.datetime.fromtimestamp(txnTime)  
+                if txnTime:
+                    txn_date_time = datetime.datetime.fromtimestamp(txnTime)
+                else: 
+                    txn_date_time = txnTime
 
-                # Get transaction info for alias.
-                txn_response = await self.get_txn(pool, seqNo)
-                if 'alias' in txn_response['data']['txn']['data']:
-                    alias = txn_response['data']['txn']['data']['alias']
-                else:
-                    alias = None
+                if not self.DEMOTE:
+                    # Get transaction info for alias.
+                    txn_response = await self.get_txn(pool, seqNo)
+                    if 'alias' in txn_response['data']['txn']['data']:
+                        alias = txn_response['data']['txn']['data']['alias']
+                    else:
+                        alias = None
 
-                # Get endpoint from ATTRIB transaction.
-                indyscan_response = requests.get(self.INDYSCAN_BASE_URL + f'/{network.indy_scan_network_id}/ledgers/domain/txs?filterTxNames=[%22ATTRIB%22]&search={did}&sortFromRecent=true')
-                indyscan_response = indyscan_response.json()
-                #* Debug util.log_debug(json.dumps(indyscan_response, indent=2)) 
+                    # Get endpoint from ATTRIB transaction.
+                    indyscan_attrib_url = f'{self.INDYSCAN_BASE_URL}/{network.indy_scan_network_id}/ledgers/domain/txs?filterTxNames=[%22ATTRIB%22]&search={did}&sortFromRecent=true'
+                    with requests.get(indyscan_attrib_url, stream=True) as attrib_response:
+                        indyscan_attrib_response = attrib_response.json()
+                    #* Debug print(indyscan_attrib_url)
+                    #* Debug util.log_debug(json.dumps(indyscan_attrib_response, indent=2)) 
 
-                if indyscan_response:
-                    for item in indyscan_response:
-                        txn = item['idata']['expansion']['idata']['txn']['data']
-                        if 'endpoint' in txn:
-                            endpoint = txn['endpoint']
-                            break
-                        else:
-                            endpoint = None
-                            break
-                else:
-                    endpoint = None
+                    if indyscan_attrib_response:
+                        for item in indyscan_attrib_response:
+                            txn = item['idata']['expansion']['idata']['txn']['data']
+                            if 'endpoint' in txn:
+                                endpoint = txn['endpoint']
+                                break
+                            else:
+                                endpoint = None
+                                break
+                    else:
+                        endpoint = None
 
-                if role == None:
-                    role_alias = 'USER'
-                elif role == '0':
-                    role_alias = 'TRUSTEE'
-                elif role == '2':
-                    role_alias = 'STEWARD'
-                elif role == '101':
-                    role_alias = 'ENDORSER'
-                elif role == '201':
-                    role_alias = 'NETWORK_MONITOR'
+                    if role == None:
+                        break
+                        role_alias = 'USER'
+                    elif role == '0':
+                        role_alias = 'TRUSTEE'
+                    elif role == '2':
+                        role_alias = 'STEWARD'
+                    elif role == '101':
+                        role_alias = 'ENDORSER'
+                    elif role == '201':
+                        role_alias = 'NETWORK_MONITOR'
 
-                # Write data to csv file.
-                row = (seqNo, did, role_alias, alias, endpoint, txn_date_time)
-                csv_file_path = f'{self.log_path}log.csv'
-                with open(csv_file_path,'a') as csv_file:
-                    writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONE)
-                    writer.writerow(row)
-                util.info(f'Info from {did} collected in CSV log.')
+                    # Write data to csv file.
+                    row = (seqNo, did, role_alias, alias, endpoint, txn_date_time)
+                    #* Debug print(row)
+                    csv_file_path = f'{self.log_path}log.csv'
+                    with open(csv_file_path,'a') as csv_file:
+                        writer = csv.writer(csv_file, delimiter=',', quotechar='"',escapechar='~', quoting=csv.QUOTE_NONE)
+                        writer.writerow(row)
+                    util.log_debug(f'Info from {did} collected in CSV log.')
 
                 # Skip Allowed DID's
                 if did in ALLOW_DIDS_LIST:

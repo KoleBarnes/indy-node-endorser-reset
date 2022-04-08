@@ -74,9 +74,11 @@ def get_records(url, headers):
         headers: API Key.
     """
     print('Submitting Airtable request ...')
-    response = requests.get(url, headers=headers)
-    log("Got Airtable response ...")
-    airtable_response = response.json()
+
+    with requests.get(url, headers=headers, stream=True) as response:
+        airtable_response = response.json()
+
+    log("Got Airtable response. FOR STAGINGNET...")
     has_items = bool(airtable_response["records"])
     if not has_items:
         warning("Airtable responded with empty response!")
