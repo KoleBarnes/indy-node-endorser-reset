@@ -148,6 +148,8 @@ class DemoteNyms(object, metaclass=Singleton):
 
             # Iterate through list_of_dids and check the current state on the ledger. Get info and demote if not allowed. 
             demoted_dids_dict = {}
+            list_of_dids = ['4dmrnD8xahrCDY8fqZQT8H', '4uFcm7seccnWSvLDhrFYVx', '54xiufB4sPDiF9NEhC3ZPK', '6xYF6VzfzVvwmiwLmudGrQ', '8xB1g95EDGMcafsZ23tADW', 'C279iyCR8wtKiPC8o9iPmb', 'Feov8PwZsopznyWxDumGqd', 'Fj151TdYuEJzHqfNVhKidP', 'GGwr1nLK6L6y2PnoiGwmvv', 'K9PX4JigoDvu6hH21Rj46W', 'P6UvpU451XA5p8Dx6zsuUu', 'PRCPhNDk4PNao4pQFGi3ys', 'RLrDx8E2icUsjedbNjQ5wZ', 'UkzQR7ffDcXxPFfSARYPi', 'VzVeAdmZY2ve3qTKLzVgg7', 'X7gjz2DXX2VdSiKd5vmMMm']
+            #! ^ REMOVE
             for did in list_of_dids:
                 # Check DID state from ledger. Gather info.
                 # Get NYM info
@@ -157,6 +159,7 @@ class DemoteNyms(object, metaclass=Singleton):
                 did = nym_check['dest']
                 role = nym_check['role']
                 txnTime = nym_check['txnTime']
+                identifier = nym_check['identifier']
                 if txnTime:
                     txn_date_time = datetime.datetime.fromtimestamp(txnTime)
                 else: 
@@ -190,7 +193,7 @@ class DemoteNyms(object, metaclass=Singleton):
                         endpoint = None
 
                     if role == None:
-                        break
+                        # break #! UNCOMMENT
                         role_alias = 'USER'
                     elif role == '0':
                         role_alias = 'TRUSTEE'
@@ -202,7 +205,7 @@ class DemoteNyms(object, metaclass=Singleton):
                         role_alias = 'NETWORK_MONITOR'
 
                     # Write data to csv file.
-                    row = (seqNo, did, role_alias, alias, endpoint, txn_date_time)
+                    row = (seqNo, did, role_alias, alias, endpoint, txn_date_time, identifier)
                     #* Debug print(row)
                     csv_file_path = f'{self.log_path}log.csv'
                     with open(csv_file_path,'a') as csv_file:
