@@ -67,7 +67,7 @@ class DemoteNyms(object, metaclass=Singleton):
 
     async def demote(self, network: Network, ident: DidKey):
         """
-        Scans for NYMs in txns with endorser roll and sends a list of DID'd to iterate() to get demoted.
+        Scans for NYMs in txns with endorser roll to get info or demoted.
         """
         ALLOW_DIDS_LIST = []
 
@@ -94,9 +94,7 @@ class DemoteNyms(object, metaclass=Singleton):
                 if data:
                     seqno_gte = data['last_seqNo']
         else:
-            util.info("No previous log files. Continuing ...") 
-
-        util.info(f'Looking for transaction greater than: {seqno_gte}')
+            util.info("No previous log files. Continuing ...")
 
         allow_dids_records = util.fetch_allow_dids()
         #* Debug util.log_debug(json.dumps(allow_dids_records, indent=2))
@@ -148,7 +146,7 @@ class DemoteNyms(object, metaclass=Singleton):
 
             # Iterate through list_of_dids and check the current state on the ledger. Get info and demote if not allowed. 
             demoted_dids_dict = {}
-            list_of_dids = ['4dmrnD8xahrCDY8fqZQT8H', '4uFcm7seccnWSvLDhrFYVx', '54xiufB4sPDiF9NEhC3ZPK', '6xYF6VzfzVvwmiwLmudGrQ', '8xB1g95EDGMcafsZ23tADW', 'C279iyCR8wtKiPC8o9iPmb', 'Feov8PwZsopznyWxDumGqd', 'Fj151TdYuEJzHqfNVhKidP', 'GGwr1nLK6L6y2PnoiGwmvv', 'K9PX4JigoDvu6hH21Rj46W', 'P6UvpU451XA5p8Dx6zsuUu', 'PRCPhNDk4PNao4pQFGi3ys', 'RLrDx8E2icUsjedbNjQ5wZ', 'UkzQR7ffDcXxPFfSARYPi', 'VzVeAdmZY2ve3qTKLzVgg7', 'X7gjz2DXX2VdSiKd5vmMMm']
+            # list_of_dids = ['Ar1YzNwcM74M2Z4XKUWXMW', 'Uvb86cUzmdgZ8AfbN176tc', '8xB1g95EDGMcafsZ23tADW', '4xE68b6S5VRFrKMMG1U95M']
             #! ^ REMOVE
             for did in list_of_dids:
                 # Check DID state from ledger. Gather info.
