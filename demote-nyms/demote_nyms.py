@@ -3,6 +3,8 @@ import csv
 import glob
 import os
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 from indy_vdr.ledger import (
     build_get_nym_request,
     build_nym_request,
@@ -21,11 +23,11 @@ class DemoteNyms(object, metaclass=Singleton):
     """
     DemoteNyms Class
     """
-    def __init__(self, verbose, network, DEMOTE, role, batch: int, pool_collection: PoolCollection):
+    def __init__(self, verbose, network, DEMOTE, role: int, batch: int, pool_collection: PoolCollection):
         self.verbose = verbose
         self.INDYSCAN_BASE_URL = network.indy_scan_base_url
         self.DEMOTE = DEMOTE
-        self.role = role
+        self.role = role 
         if batch: self.batch = int(batch)
         else: self.batch = -1
         self.pool_collection = pool_collection
@@ -80,6 +82,13 @@ class DemoteNyms(object, metaclass=Singleton):
         demoted_dids_list = []
         start_time = datetime.datetime.now()
 
+        # Build resquests Session with retry.
+        session = requests.Session()
+        retry = Retry(connect=3, backoff_factor=1)
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+
         if not os.path.exists(f'{self.log_path}'):
             print("Log file not found. Please create folder ./logs and try again.")
             print("Exiting ... ")
@@ -122,11 +131,11 @@ class DemoteNyms(object, metaclass=Singleton):
             # Get Nym transactions with specified role from indy scan
             util.info(f'Looking for seqNos greater than {seqno_gte} ...')
             
-            indyscan_nym_url = f"{self.INDYSCAN_BASE_URL}/{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22NYM%22]&search='{self.role}'&sortFromRecent=false"
-            with requests.get(indyscan_nym_url, stream=True) as nym_response:
+            indyscan_nym_url = f"{self.INDYSCAN_BASE_URL}{network.indy_scan_network_id}/ledgers/domain/txs?seqNoGte={seqno_gte}&filterTxNames=[%22NYM%22]&search='{self.role}'&sortFromRecent=false"
+            with session.get(indyscan_nym_url) as nym_response:
                 indyscan_nym_response = nym_response.json()
 
-            #* Debug print(indyscan_nym_url) 
+            print(indyscan_nym_url)  #* Debug 
             #* Debug util.log_debug(json.dumps(indyscan_nym_response, indent=2)) 
 
             if network_name == "Local von-network":
@@ -137,25 +146,38 @@ class DemoteNyms(object, metaclass=Singleton):
             # Add NYM's DID with specified role, append them to a list to check current state from ledger.
             if indyscan_nym_response:
                 for item in indyscan_nym_response:
-                    txn = item['idata']['expansion']['idata']['txn']['data']
-                    did = txn['dest']
+                    seqNo = item['imeta']['seqNo']
+                    did = item['idata']['expansion']['idata']['txn']['data']['dest']
                     list_of_dids.append(did)
             else:
                 util.info("No more transactions at this time ...")
                 break
 
+            util.info(f'Found {len(list_of_dids)} DIDs with role = {self.role} ...')
+
             # Iterate through list_of_dids and check the current state on the ledger. Get info and demote if not allowed. 
             demoted_dids_dict = {}
-            # list_of_dids = ['Ar1YzNwcM74M2Z4XKUWXMW', 'Uvb86cUzmdgZ8AfbN176tc', '8xB1g95EDGMcafsZ23tADW', '4xE68b6S5VRFrKMMG1U95M']
-            #! ^ REMOVE
             for did in list_of_dids:
                 # Check DID state from ledger. Gather info.
                 # Get NYM info
                 nym_response = await self.get_nym(pool, did)
                 nym_check = json.loads(nym_response['data']) # Remove json encoding
-                seqNo = nym_check['seqNo']
+                ledger_seqNo = nym_check['seqNo']
                 did = nym_check['dest']
                 role = nym_check['role']
+                if role == None:
+                    util.log_debug(f'{did} has been demoted to an Author role at {ledger_seqNo}. Skipping ...')
+                    continue
+                    role_alias = 'AUTHOR'
+                elif role == '0':
+                    role_alias = 'TRUSTEE'
+                elif role == '2':
+                    role_alias = 'STEWARD'
+                elif role == '101':
+                    role_alias = 'ENDORSER'
+                elif role == '201':
+                    role_alias = 'NETWORK_MONITOR'
+
                 txnTime = nym_check['txnTime']
                 identifier = nym_check['identifier']
                 if txnTime:
@@ -164,52 +186,36 @@ class DemoteNyms(object, metaclass=Singleton):
                     txn_date_time = txnTime
 
                 if not self.DEMOTE:
+                    util.log_debug('Not Demoting. Looking for information and posting to csv log.')
                     # Get transaction info for alias.
-                    txn_response = await self.get_txn(pool, seqNo)
+                    txn_response = await self.get_txn(pool, ledger_seqNo)
                     if 'alias' in txn_response['data']['txn']['data']:
                         alias = txn_response['data']['txn']['data']['alias']
                     else:
                         alias = None
 
                     # Get endpoint from ATTRIB transaction.
-                    indyscan_attrib_url = f'{self.INDYSCAN_BASE_URL}/{network.indy_scan_network_id}/ledgers/domain/txs?filterTxNames=[%22ATTRIB%22]&search={did}&sortFromRecent=true'
-                    with requests.get(indyscan_attrib_url, stream=True) as attrib_response:
+                    indyscan_attrib_url = f'{self.INDYSCAN_BASE_URL}{network.indy_scan_network_id}/ledgers/domain/txs?filterTxNames=[%22ATTRIB%22]&search={did}&sortFromRecent=true'
+                    with session.get(indyscan_attrib_url) as attrib_response:
                         indyscan_attrib_response = attrib_response.json()
                     #* Debug print(indyscan_attrib_url)
                     #* Debug util.log_debug(json.dumps(indyscan_attrib_response, indent=2)) 
 
+                    # Default endpoint to None
+                    endpoint = None
                     if indyscan_attrib_response:
-                        for item in indyscan_attrib_response:
-                            txn = item['idata']['expansion']['idata']['txn']['data']
-                            if 'endpoint' in txn:
-                                endpoint = txn['endpoint']
-                                break
-                            else:
-                                endpoint = None
-                                break
-                    else:
-                        endpoint = None
-
-                    if role == None:
-                        # break #! UNCOMMENT
-                        role_alias = 'USER'
-                    elif role == '0':
-                        role_alias = 'TRUSTEE'
-                    elif role == '2':
-                        role_alias = 'STEWARD'
-                    elif role == '101':
-                        role_alias = 'ENDORSER'
-                    elif role == '201':
-                        role_alias = 'NETWORK_MONITOR'
+                        txn = indyscan_attrib_response[0]['idata']['expansion']['idata']['txn']['data']
+                        if 'endpoint' in txn:
+                            endpoint = txn['endpoint']
 
                     # Write data to csv file.
-                    row = (seqNo, did, role_alias, alias, endpoint, txn_date_time, identifier)
+                    row = (ledger_seqNo, did, role_alias, alias, endpoint, txn_date_time, identifier)
                     #* Debug print(row)
                     csv_file_path = f'{self.log_path}log.csv'
                     with open(csv_file_path,'a') as csv_file:
                         writer = csv.writer(csv_file, delimiter=',', quotechar='"',escapechar='~', quoting=csv.QUOTE_NONE)
                         writer.writerow(row)
-                    util.log_debug(f'Info from {did} collected in CSV log.')
+                    util.info(f'Info from {did} collected in CSV log.')
 
                 # Skip Allowed DID's
                 if did in ALLOW_DIDS_LIST:
@@ -220,10 +226,10 @@ class DemoteNyms(object, metaclass=Singleton):
 
                 # Demote if condisions allow. Collect the seqNo of the demote transaction and the DID that was demoted.
                 if self.DEMOTE and self.role == '101': # Check to avoid accidental demotion.
-                    
+                    util.log_debug(f'DEMOTING DIDs with {self.role} ...')
                     # Demote if not allowed and role is set as endorsor. 
                     if nym_check['role'] == "101":
-                        util.info(f'Building demote request for: {did} SeqNo: {seqNo} Role: {role} ...')
+                        util.info(f'Building demote request for: {did} SeqNo: {ledger_seqNo} Role: {role} ...')
                     else:
                         util.log_debug(f'{did} Not endorser. Role: {role} ...')
                         continue
@@ -237,6 +243,7 @@ class DemoteNyms(object, metaclass=Singleton):
                 
                 if self.batch != -1:
                     if self.batch == 1:
+                        util.log("Hit batch limit ...")
                         break
                     self.batch = self.batch - 1
                 # End of for loop.
