@@ -240,6 +240,15 @@ class DemoteNyms(object, metaclass=Singleton):
                     demoted_dids_dict['new_txn_seqno'] = new_txn_seqNo
                     demoted_dids_dict['did'] = did
                     demoted_dids_list.append(demoted_dids_dict.copy())
+
+                    # Write data to csv file.
+                    row = (ledger_seqNo, did, role, new_txn_seqNo, 'DEMOTED')
+                    #* Debug print(row)
+                    csv_file_path = f'{self.log_path}DEMOTED.csv'
+                    with open(csv_file_path,'a') as csv_file:
+                        writer = csv.writer(csv_file, delimiter=',', quotechar='"',escapechar='~', quoting=csv.QUOTE_NONE)
+                        writer.writerow(row)
+                    util.info(f'Info from {did} collected in CSV DEMOTED log.')
                 
                 if self.batch != -1:
                     if self.batch == 1:
@@ -275,5 +284,6 @@ class DemoteNyms(object, metaclass=Singleton):
         date_time = end_time.strftime("%Y-%m-%d--%H_%M_%S")
         new_file_path = f'{self.log_path}{date_time}.json'
         util.write_to_file(new_file_path, result)
+        #util.write_to_file(new_file_path, result) #!REMOVE COMMENT
 
         return result
