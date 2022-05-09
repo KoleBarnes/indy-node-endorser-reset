@@ -10,6 +10,8 @@ from indy_vdr.ledger import (
     build_nym_request,
     build_custom_request,
     build_get_txn_request,
+    build_get_txn_author_agreement_request,
+    prepare_txn_author_agreement_acceptance,
     LedgerType,
 )
 from networks import Network
@@ -49,11 +51,11 @@ class DemoteNyms(object, metaclass=Singleton):
         req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
         return await pool.submit_request(req)
 
-    async def demote_nym(self, pool, ident: DidKey, dest):
+    async def demote_nym(self, pool, author_agreement, ident: DidKey, dest):
         """
         Uses build_nym_request to demote NYM.
         """
-        print("DEMOTING DID!!!")
+        #print("DEMOTING DID!!!")
         nym_build_req = build_nym_request(ident.did, dest)
         nym_build_req_body = json.loads(nym_build_req.body)
         #* Debug util.log_debug(json.dumps(nym_build_req_body, indent=2))
@@ -61,6 +63,7 @@ class DemoteNyms(object, metaclass=Singleton):
         nym_build_req_body = json.loads(nym_build_req.body)
         nym_build_req_body["operation"]["role"] = None
         custom_req = build_custom_request(nym_build_req_body)
+        custom_req.set_txn_author_agreement_acceptance(author_agreement)
         #* Debug util.log_debug(json.dumps(json.loads(custom_req.body), indent=2))
 
         ident.sign_request(custom_req)
@@ -112,6 +115,12 @@ class DemoteNyms(object, metaclass=Singleton):
             ALLOW_DIDS_LIST.append(allow_did)
 
         pool, network_name = await self.pool_collection.get_pool(network.id)
+        taa_request = build_get_txn_author_agreement_request()
+        taa = await pool.submit_request(taa_request)
+        taa_text = taa['data']['text']
+        taa_version = taa['data']['version']
+        taa_digest = taa['data']['digest']
+        author_agreement = prepare_txn_author_agreement_acceptance(text=taa_text, version=taa_version, taa_digest=taa_digest, mechanism='for_session')
 
         util.info("Starting scan. This may take a while ...")
 
@@ -222,6 +231,14 @@ class DemoteNyms(object, metaclass=Singleton):
                     if did not in skipped_dids_list:
                         skipped_dids_list.append(did)
                     util.info(f'Found Allow DID: {did} Skipping ...')
+                    
+                    # Write data to csv file.
+                    row = (did, 'SKIPPED')
+                    #* Debug print(row)
+                    csv_file_path = f'{self.log_path}DEMOTED.csv'
+                    with open(csv_file_path,'a') as csv_file:
+                        writer = csv.writer(csv_file, delimiter=',', quotechar='"',escapechar='~', quoting=csv.QUOTE_NONE)
+                        writer.writerow(row)
                     continue
 
                 # Demote if condisions allow. Collect the seqNo of the demote transaction and the DID that was demoted.
@@ -234,7 +251,7 @@ class DemoteNyms(object, metaclass=Singleton):
                         util.log_debug(f'{did} Not endorser. Role: {role} ...')
                         continue
 
-                    demote_nym_reponse = await self.demote_nym(pool, ident, did)
+                    demote_nym_reponse = await self.demote_nym(pool, author_agreement, ident, did)
                     #* Debug util.log_debug(json.dumps(demote_nym_reponse, indent=2))
                     new_txn_seqNo = demote_nym_reponse['txnMetadata']['seqNo']
                     demoted_dids_dict['new_txn_seqno'] = new_txn_seqNo

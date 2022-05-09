@@ -29,6 +29,12 @@ if __name__ == "__main__":
     
     did_seed = None if not args.seed else args.seed
 
+    util.log("indy-vdr version:", indy_vdr.version())
+    ident = util.create_did(did_seed)
+    networks = Networks()
+    pool_collection = PoolCollection(args.verbose, networks)
+    network = networks.resolve(args.net)
+
     if args.DEMOTE: # Check to avoid accidental demotion.
         if not did_seed:
             print("DID seed required to Demote. Exiting ...")
@@ -41,12 +47,6 @@ if __name__ == "__main__":
         if not Join.startswith('y'):
             print('exiting...')
             exit()
-
-    util.log("indy-vdr version:", indy_vdr.version())
-    ident = util.create_did(did_seed)
-    networks = Networks()
-    pool_collection = PoolCollection(args.verbose, networks)
-    network = networks.resolve(args.net)
 
     demote_nyms = DemoteNyms(args.verbose, network, args.DEMOTE, args.role, args.batch, pool_collection)
     result = asyncio.get_event_loop().run_until_complete(demote_nyms.demote(network, ident))
