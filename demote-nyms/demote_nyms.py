@@ -1,3 +1,4 @@
+import time
 import json
 import csv
 import glob
@@ -40,16 +41,35 @@ class DemoteNyms(object, metaclass=Singleton):
             os.mkdir(self.log_path)
             print(f'Directory {self.log_path} created ...')
 
+    async def submit_pool_request(self, pool, request):
+        loop = 3
+        while loop:
+            try:
+                print('test')
+                data = await pool.submit_request(request)
+                return data
+            except:
+                print(loop)
+                if loop >= 0: 
+                    util.info("Unable to submit pool request. Trying again ...")
+                    loop = loop - 1
+                    time.sleep(20)
+                    continue
+                else:
+                    util.info("Unable to submit pool request. Exiting ...")
+                    exit()
+
+
     async def get_nym(self, pool, nym):
         """
         Get NYM request
         """
         req = build_get_nym_request(None, nym)
-        return await pool.submit_request(req)
+        return await self.submit_pool_request(pool, req)
 
     async def get_txn(self, pool, seq_no: int):
         req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
-        return await pool.submit_request(req)
+        return await self.submit_pool_request(pool, req)
 
     async def demote_nym(self, pool, author_agreement, ident: DidKey, dest):
         """
@@ -68,7 +88,7 @@ class DemoteNyms(object, metaclass=Singleton):
 
         ident.sign_request(custom_req)
         #* Debug util.log_debug(json.dumps(json.loads(custom_req.body), indent=2))
-        return await pool.submit_request(custom_req)
+        return await self.submit_pool_request(pool, custom_req)
 
     async def demote(self, network: Network, ident: DidKey):
         """
@@ -78,7 +98,7 @@ class DemoteNyms(object, metaclass=Singleton):
 
         result = {}
         seqNo = 0
-        seqno_gte = 0
+        seqno_gte = 98506
         data = None
         list_of_dids = []
         skipped_dids_list = []
@@ -116,7 +136,7 @@ class DemoteNyms(object, metaclass=Singleton):
 
         pool, network_name = await self.pool_collection.get_pool(network.id)
         taa_request = build_get_txn_author_agreement_request()
-        taa = await pool.submit_request(taa_request)
+        taa = await self.submit_pool_request(pool, taa_request)
         taa_text = taa['data']['text']
         taa_version = taa['data']['version']
         taa_digest = taa['data']['digest']
