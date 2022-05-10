@@ -17,17 +17,14 @@ class PoolCollection(object, metaclass=Singleton):
             try:
                 log("Connecting to Pool ...")
                 pool = await open_pool(transactions_path=genesis_path)
+                return pool
             except:
                 log("Pool Timed Out! Trying again ...")
+                attempt -= 1
                 if not attempt:
                     print("Unable to get response from pool!  3 attempts where made.  Exiting ...")
                     exit()
-                attempt -= 1
                 continue
-            else:
-                log("Connected to Pool ...")
-            break
-        return pool
 
     async def get_pool(self, network_id):
         network = self.networks.resolve(network_id)

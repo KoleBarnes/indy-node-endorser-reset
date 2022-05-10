@@ -42,30 +42,42 @@ class DemoteNyms(object, metaclass=Singleton):
             print(f'Directory {self.log_path} created ...')
 
     async def submit_pool_request(self, pool, request):
-        loop = 3
-        while loop:
+        attempt = 3
+        while attempt:
             try:
-                print('test')
                 data = await pool.submit_request(request)
                 return data
-            except:
-                print(loop)
-                if loop >= 0: 
-                    util.info("Unable to submit pool request. Trying again ...")
-                    loop = loop - 1
-                    time.sleep(20)
-                    continue
-                else:
-                    util.info("Unable to submit pool request. Exiting ...")
+            except BaseException as e:
+                util.warning("Unable to submit pool request. Trying again ...")
+                util.warning(e)
+                pool_status = await pool.get_status()
+                print(pool_status)
+                if not attempt:
+                    util.fail("Unable to submit pool request.  3 attempts where made.  Exiting ...")
                     exit()
-
+                attempt -= 1
+                time.sleep(10)
+                continue
 
     async def get_nym(self, pool, nym):
         """
         Get NYM request
         """
-        req = build_get_nym_request(None, nym)
-        return await self.submit_pool_request(pool, req)
+        attempt = 3
+        while attempt:
+            try:
+                req = build_get_nym_request(None, nym)
+                return await pool.submit_request(req)
+            except BaseException as e:
+                util.warning("Get NYM Function")
+                util.warning("Unable to submit pool request. Trying again ...")
+                print(e)
+                attempt -= 1
+                if not attempt:
+                    util.fail("Unable to submit pool request.  3 attempts where made.  Exiting ...")
+                    exit()
+                time.sleep(10)
+                continue
 
     async def get_txn(self, pool, seq_no: int):
         req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
@@ -76,19 +88,31 @@ class DemoteNyms(object, metaclass=Singleton):
         Uses build_nym_request to demote NYM.
         """
         #print("DEMOTING DID!!!")
-        nym_build_req = build_nym_request(ident.did, dest)
-        nym_build_req_body = json.loads(nym_build_req.body)
-        #* Debug util.log_debug(json.dumps(nym_build_req_body, indent=2))
+        attempt = 3
+        while attempt:
+            try:
+                nym_build_req = build_nym_request(ident.did, dest)
+                nym_build_req_body = json.loads(nym_build_req.body)
+                #* Debug util.log_debug(json.dumps(nym_build_req_body, indent=2))
 
-        nym_build_req_body = json.loads(nym_build_req.body)
-        nym_build_req_body["operation"]["role"] = None
-        custom_req = build_custom_request(nym_build_req_body)
-        custom_req.set_txn_author_agreement_acceptance(author_agreement)
-        #* Debug util.log_debug(json.dumps(json.loads(custom_req.body), indent=2))
+                nym_build_req_body["operation"]["role"] = None
+                custom_req = build_custom_request(nym_build_req_body)
+                custom_req.set_txn_author_agreement_acceptance(author_agreement)
+                #* Debug util.log_debug(json.dumps(json.loads(custom_req.body), indent=2))
 
-        ident.sign_request(custom_req)
-        #* Debug util.log_debug(json.dumps(json.loads(custom_req.body), indent=2))
-        return await self.submit_pool_request(pool, custom_req)
+                ident.sign_request(custom_req)
+                #* Debug util.log_debug(json.dumps(json.loads(custom_req.body), indent=2))
+                return await pool.submit_request(custom_req)
+            except BaseException as e:
+                util.warning("Demote NYM Function")
+                util.warning("Unable to submit pool request. Trying again ...")
+                print(e)
+                attempt -= 1
+                if not attempt:
+                    util.fail("Unable to submit pool request.  3 attempts where made.  Exiting ...")
+                    exit()
+                time.sleep(10)
+                continue
 
     async def demote(self, network: Network, ident: DidKey):
         """
@@ -98,7 +122,7 @@ class DemoteNyms(object, metaclass=Singleton):
 
         result = {}
         seqNo = 0
-        seqno_gte = 98506
+        seqno_gte = 0
         data = None
         list_of_dids = []
         skipped_dids_list = []
@@ -131,7 +155,7 @@ class DemoteNyms(object, metaclass=Singleton):
         allow_dids_records = util.fetch_allow_dids()
         #* Debug util.log_debug(json.dumps(allow_dids_records, indent=2))
         for record in allow_dids_records['records']:
-            allow_did = record['fields'].get('DIDs')
+            allow_did = record['fields'].get('DIDs').strip()
             ALLOW_DIDS_LIST.append(allow_did)
 
         pool, network_name = await self.pool_collection.get_pool(network.id)
@@ -253,7 +277,7 @@ class DemoteNyms(object, metaclass=Singleton):
                     util.info(f'Found Allow DID: {did} Skipping ...')
                     
                     # Write data to csv file.
-                    row = (did, 'SKIPPED')
+                    row = (None, did, None, None, 'SKIPPED')
                     #* Debug print(row)
                     csv_file_path = f'{self.log_path}DEMOTED.csv'
                     with open(csv_file_path,'a') as csv_file:
@@ -263,7 +287,7 @@ class DemoteNyms(object, metaclass=Singleton):
 
                 # Demote if condisions allow. Collect the seqNo of the demote transaction and the DID that was demoted.
                 if self.DEMOTE and self.role == '101': # Check to avoid accidental demotion.
-                    util.log_debug(f'DEMOTING DIDs with {self.role} ...')
+                    #* Debug util.log_debug(f'DEMOTING DIDs with {self.role} ...')
                     # Demote if not allowed and role is set as endorsor. 
                     if nym_check['role'] == "101":
                         util.info(f'Building demote request for: {did} SeqNo: {ledger_seqNo} Role: {role} ...')
